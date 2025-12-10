@@ -1,0 +1,11 @@
+{
+    "watch": [
+        "./*.js"
+    ],
+    "ignore": [
+        "./*.spec.js",
+        "./node_modules/"
+    ],
+    "ext": "ts,js",
+    "exec": "node ./index.js"
+}
