@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import promptModule from "prompt-sync";
 
-// instantiate prompt to use its async-await functionality
+// instantiate prompt
 const prompt = promptModule();
 // Define an object to represent the local database
 const mockDB = { passwords: {} };
@@ -9,7 +9,6 @@ const mockDB = { passwords: {} };
 const saveNewPassword = (password) => {
   mockDB.hash = bcrypt.hashSync(password, 10);
   console.log("Password has been saved!");
-  showMenu();
 };
 
 // define a custom func to compare a plain-text password to a hashed password
@@ -20,7 +19,7 @@ const compareHashedPassword = async (password) => {
 
 const promptNewPassword = () => {
   const response = prompt("Enter the main password: ");
-  return saveNewPassword(response);
+  saveNewPassword(response);
 };
 
 const promptOldPassword = async () => {
@@ -36,8 +35,6 @@ const promptOldPassword = async () => {
       console.log("Password verified.");
       //  set verification flag to `true` once the password is validated
       verified = true;
-      //  Show menu if the password is correct.
-      showMenu();
     } else {
       // Display an error and retry if the password is incorrect
       console.log("Password incorrect. Try again.");
@@ -46,26 +43,27 @@ const promptOldPassword = async () => {
 };
 
 const showMenu = async () => {
-  // prompt the user with 4 options to select
-  console.log(`1. View passwords\n2. Manage new password\n3. Verify password\n4. Exit
+  while (true) {
+    // prompt the user with 4 options to select
+    console.log(`1. View passwords\n2. Manage new password\n3. Verify password\n4. Exit
     `);
-  const response = prompt(">");
-  switch (response) {
-    case "1":
-      viewPasswords();
-      break;
-    case "2":
-      promptManageNewPassword();
-      break;
-    case "3":
-      promptOldPassword();
-      break;
-    case "4":
-      // if no valid option is selected, the user is prompted again
-      process.exit();
-    default:
-      console.log("That's an invalid response.");
-      showMenu();
+    const response = prompt(">");
+    switch (response) {
+      case "1":
+        viewPasswords();
+        break;
+      case "2":
+        promptManageNewPassword();
+        break;
+      case "3":
+        await promptOldPassword();
+        break;
+      case "4":
+        process.exit();
+        break;
+      default:
+        console.log("That's an invalid response.");
+    }
   }
 };
 
@@ -75,8 +73,6 @@ const viewPasswords = () => {
   Object.entries(passwords).forEach(([key, value], index) => {
     console.log(`${index + 1}. ${key} => ${value}`);
   });
-
-  showMenu();
 };
 
 const promptManageNewPassword = () => {
@@ -87,14 +83,16 @@ const promptManageNewPassword = () => {
   mockDB.passwords[source] = password;
 
   console.log(`Password for ${source} has been saved!`);
-
-  // to display the menu options
-  showMenu();
 };
 
 // Start the app
-if (!mockDB.hash) {
-  promptNewPassword();
-} else {
-  promptOldPassword();
-}
+const main = async () => {
+  if (!mockDB.hash) {
+    promptNewPassword();
+  } else {
+    await promptOldPassword();
+  }
+  await showMenu();
+};
+
+main();
