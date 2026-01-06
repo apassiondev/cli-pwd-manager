@@ -1,6 +1,17 @@
 import bcrypt from "bcrypt";
 import chalk from "chalk";
+import { MongoClient } from "mongodb";
 import promptModule from "prompt-sync";
+
+// define database URL for db connection
+const dbUrl = "mongodb://localhost:27017";
+// set the database name to "passwordManager"
+const dbName = "passwordManager";
+// create a new MongoDB Client instance to MongoDB server
+const mongoInstance = new MongoClient(dbUrl);
+// declare a flag to track whether a master password already exists.
+let hasPasswords = false;
+let passwordsCollection, authCollection;
 
 // instantiate prompt to use its async-await functionality
 const prompt = promptModule();
