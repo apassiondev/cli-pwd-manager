@@ -3,12 +3,18 @@ import chalk from "chalk";
 import { MongoClient } from "mongodb";
 import promptModule from "prompt-sync";
 
+const dbConfig = {
+  auth: "admin",
+  user: encodeURIComponent("root"),
+  pass: encodeURIComponent("root@@pwd"),
+  name: "passwordManager" /* set the database name to "passwordManager" */,
+  url: null /* database URL for db connection */,
+};
+
 // define database URL for db connection
-const dbUrl = "mongodb://localhost:27017";
-// set the database name to "passwordManager"
-const dbName = "passwordManager";
+dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017/?authSource=${dbConfig.auth}`;
 // create a new MongoDB Client instance to MongoDB server
-const mongoInstance = new MongoClient(dbUrl);
+const mongoClient = new MongoClient(dbConfig.url);
 // declare a flag to track whether a master password already exists.
 let hasPasswords = false;
 let passwordsCollection, authCollection;
@@ -39,7 +45,7 @@ const compareHashedPassword = (plainPassword) => {
 
 const promptNewPassword = () => {
   const response = prompt(
-    "Enter the main password: ",
+    "Welcome aboard!\nEnter the main password: ",
     {
       echo: "*",
     } /* hide the input completely with specifying a character to task the input  */
@@ -127,16 +133,43 @@ const promptManageNewPassword = () => {
   showMenu();
 };
 
-// Start the app
-const main = async () => {
-  // If there is no existing hash value
-  if (!mockDB.hash) {
-    promptNewPassword();
-  } else {
-    promptOldPassword();
-  }
+const app = async () => {
+  try {
+    // establish a connection to your db server
+    await mongoClient.connect();
+    console.log(
+      chalk.green(
+        `Connected successfully to DB server at ${new Date().toISOString()} \n`
+      )
+    );
 
-  showMenu();
+    // create or connect to a db with specific db "passwordManager"
+    const db = mongoClient.db(dbConfig.name);
+
+    // create database collections called "auth" and "passwords"
+    authCollection = db.collection("auth"); // store hashed password
+    passwordsCollection = db.collection("passwords"); // store passwords list
+
+    // check if a hashed password with type of "auth" existed in your "auth" collection
+    const hashedPassword = await authCollection.findOne({ type: "auth" });
+    // return the boolean value of your resulting search in the db
+    // true => there's an existing hashed password. Otherwise, return false
+    return !!hashedPassword;
+  } catch (error) {
+    // if there is any caught exception found, exit the process
+    console.error(chalk.red("Error connecting to database:"), error);
+    process.exit(1);
+  }
+};
+
+const main = async () => {
+  const hasPassword = await app();
+
+  if (hasPassword) {
+    promptOldPassword();
+  } else {
+    promptNewPassword();
+  }
 };
 
 main();
