@@ -4,15 +4,18 @@ import { MongoClient } from "mongodb";
 import promptModule from "prompt-sync";
 
 const dbConfig = {
-  auth: "admin",
-  user: encodeURIComponent("root"),
-  pass: encodeURIComponent("root@@pwd"),
-  name: "passwordManager" /* set the database name to "passwordManager" */,
+  // auth: "admin",
+  // user: encodeURIComponent("usr"),
+  user: encodeURIComponent("pwd1"),
+  pass: encodeURIComponent("pwd@@pwd"),
+  name: "passwordsdb" /* set the database name to "passwordManager" */,
   url: null /* database URL for db connection */,
 };
 
 // define database URL for db connection
-dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017/?authSource=${dbConfig.auth}`;
+// dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017/?authSource=${dbConfig.name}`;
+dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017`;
+console.log(chalk.blue(dbConfig.url) + "\n");
 // create a new MongoDB Client instance to MongoDB server
 const mongoClient = new MongoClient(dbConfig.url);
 // declare a flag to track whether a master password already exists.
