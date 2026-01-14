@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import chalk from "chalk";
-import { MongoClient } from "mongodb";
+import { MongoClient, ReturnDocument } from "mongodb";
 import promptModule from "prompt-sync";
 
 const dbConfig = {
@@ -15,7 +15,6 @@ const dbConfig = {
 // define database URL for db connection
 // dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017/?authSource=${dbConfig.name}`;
 dbConfig.url = `mongodb://${dbConfig.user}:${dbConfig.pass}@localhost:27017`;
-console.log(chalk.blue(dbConfig.url) + "\n");
 // create a new MongoDB Client instance to MongoDB server
 const mongoClient = new MongoClient(dbConfig.url);
 // declare a flag to track whether a master password already exists.
@@ -24,8 +23,6 @@ let passwordsCollection, authCollection;
 
 // instantiate prompt to use its async-await functionality
 const prompt = promptModule();
-// Define an object to represent the local database
-const mockDB = { passwords: {} };
 
 const menuText = [
   "[1] View passwords",
@@ -34,21 +31,27 @@ const menuText = [
   "[4] Exit",
 ];
 
-const saveNewPassword = (password) => {
-  mockDB.hash = bcrypt.hashSync(password, 10);
+const saveNewPassword = async (password) => {
+  const hash = bcrypt.hashSync(password, 10);
+  await authCollection.insertOne({
+    type: "auth",
+    hash,
+  });
   console.log(chalk.green("Password has been saved!"));
   showMenu();
 };
 
 // define a custom func to compare a plain-text password to a hashed password
-const compareHashedPassword = (plainPassword) => {
-  // compare the input plainPassword to the value in your local database
-  return bcrypt.compareSync(plainPassword, mockDB.hash);
+const compareHashedPassword = async (plainPassword) => {
+  // search MongoDB's authCollection for a hashed password
+  const { hash } = await authCollection.findOne({ type: "auth" });
+  // send the found hashed password to compare with the input password (plain)
+  return bcrypt.compareSync(plainPassword, hash);
 };
 
 const promptNewPassword = () => {
   const response = prompt(
-    "Welcome aboard!\nEnter the main password: ",
+    "Enter the main password: ",
     {
       echo: "*",
     } /* hide the input completely with specifying a character to task the input  */
@@ -56,21 +59,19 @@ const promptNewPassword = () => {
   saveNewPassword(response);
 };
 
-const promptOldPassword = () => {
+const promptOldPassword = async () => {
   let verified = false; // the flag that tracks whether the password has been verified
 
   while (!verified) {
-    console.log("Verify?:", verified);
     // prompt user to retype their existing password
     const response = prompt("Enter your current password: ", { echo: "*" });
     // compare the input against the stored hashed password
 
     try {
-      const result = compareHashedPassword(response);
-      console.log("Result:", result);
+      const result = await compareHashedPassword(response);
 
       if (result) {
-        console.log(chalk.green("Password verified!"));
+        console.log(chalk.green("Password verified!".toUpperCase()));
         //  set verification flag to `true` once the password is validated
         verified = true;
         //  Show menu if the password is correct.
@@ -85,19 +86,20 @@ const promptOldPassword = () => {
   }
 };
 
-const showMenu = () => {
+const showMenu = async () => {
+  console.log(new Array(20).join("-"));
   // prompt the user with 4 options to select
   console.log(`${menuText.join("\n")}`);
   const response = prompt("Choose an option: ");
   switch (parseInt(response)) {
     case 1:
-      viewPasswords();
+      await viewPasswords();
       break;
     case 2:
-      promptManageNewPassword();
+      await promptManageNewPassword();
       break;
     case 3:
-      promptOldPassword();
+      await promptOldPassword();
       break;
     case 4:
       process.exit();
@@ -108,26 +110,38 @@ const showMenu = () => {
   }
 };
 
-const viewPasswords = () => {
-  const passwordEntries = Object.entries(mockDB.passwords || {});
+const viewPasswords = async () => {
+  // query all passwords from passwordCollection
+  const passwords = await passwordsCollection.find({}).toArray();
 
-  if (passwordEntries.length) {
-    passwordEntries.forEach(([key, value], index) => {
-      console.log(`${index + 1}. ${key} => ${value}`);
+  // iterate through the passwords and log them into console
+  if (passwords.length) {
+    passwords.forEach(({ source, password }, index) => {
+      console.log(`${index + 1}. ${source} => ${password}`);
     });
-    return;
+  } else {
+    console.log(chalk.yellow("No passwords found!".toUpperCase()));
   }
 
-  console.log(chalk.yellow("No passwords found!".toUpperCase()));
   showMenu();
 };
 
-const promptManageNewPassword = () => {
+const promptManageNewPassword = async () => {
   const source = prompt("Enter title for password: ");
   const password = prompt("Enter password to save: ", { echo: "*" });
 
-  // save the source and password pair in mockDB
-  mockDB.passwords[source] = password;
+  // look for an existing password that matches your `source`
+  // then set its value to the `password` variable.
+  await passwordsCollection.findOneAndUpdate(
+    { source },
+    {
+      $set: { password },
+    },
+    {
+      returnDocument: true,
+      upsert: true,
+    }
+  );
 
   console.log(
     chalk.green(`Password for "${source}" has been saved!`.toUpperCase())
@@ -140,11 +154,8 @@ const app = async () => {
   try {
     // establish a connection to your db server
     await mongoClient.connect();
-    console.log(
-      chalk.green(
-        `Connected successfully to DB server at ${new Date().toISOString()} \n`
-      )
-    );
+    console.log(chalk.green("DB Connected".toUpperCase()));
+    console.log(chalk.gray(`[${new Date().toISOString()}]`));
 
     // create or connect to a db with specific db "passwordManager"
     const db = mongoClient.db(dbConfig.name);
